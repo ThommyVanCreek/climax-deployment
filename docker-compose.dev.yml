@@ -1,0 +1,136 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# ClimaX Full Stack - Development Docker Compose
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# This docker-compose builds and runs services locally for development.
+# It connects to the real Bridge via its IP address.
+#
+# Usage:
+#   # Start all services with hot-reload
+#   docker-compose -f docker-compose.dev.yml up
+#
+#   # Rebuild after code changes
+#   docker-compose -f docker-compose.dev.yml up --build
+#
+#   # Stop all services
+#   docker-compose -f docker-compose.dev.yml down
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+services:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # PostgreSQL Database (same as production)
+  # ─────────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: climax-db-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-climax}
+      POSTGRES_USER: ${POSTGRES_USER:-climax}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-climax} -d ${POSTGRES_DB:-climax}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - climax-dev-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # ClimaX API Server (Flask - Development Mode)
+  # ─────────────────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ../climax-database-server
+      dockerfile: Dockerfile
+    container_name: climax-api-dev
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-climax}
+      DB_USER: ${POSTGRES_USER:-climax}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+      API_KEY_WRITE: ${API_KEY_WRITE:-dev_write_key}
+      API_KEY_READ: ${API_KEY_READ:-dev_read_key}
+      PORT: 5000
+      HOST: 0.0.0.0
+      DEBUG: "true"
+      TIMEZONE: ${TIMEZONE:-Europe/Berlin}
+      CORS_ORIGINS: "*"
+      LOG_LEVEL: DEBUG
+      # Bridge connection (for proxying or direct calls)
+      BRIDGE_IP: ${BRIDGE_IP:-192.168.1.100}
+      BRIDGE_PORT: ${BRIDGE_PORT:-80}
+    ports:
+      - "${API_PORT:-5000}:5000"
+    volumes:
+      # Mount source for hot-reload (optional)
+      - ../climax-database-server/database_server.py:/app/database_server.py:ro
+    networks:
+      - climax-dev-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # ClimaX Client (Vue3 + Vite - Development Mode with Hot Reload)
+  # ─────────────────────────────────────────────────────────────────────────────
+  client:
+    build:
+      context: ../climax-client
+      dockerfile: Dockerfile.dev
+    container_name: climax-client-dev
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      # API URL - the client calls this from the browser
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:5000}
+      # Bridge URL - direct connection to ESP32 Bridge
+      VITE_BRIDGE_URL: ${VITE_BRIDGE_URL:-http://192.168.1.100}
+      VITE_API_KEY: ${API_KEY_READ:-dev_read_key}
+    ports:
+      - "${CLIENT_PORT:-3000}:3000"
+    volumes:
+      # Mount source for hot-reload
+      - ../climax-client/src:/app/src
+      - ../climax-client/index.html:/app/index.html
+      - ../climax-client/vite.config.js:/app/vite.config.js
+    networks:
+      - climax-dev-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Adminer (Database Admin UI) - Always enabled in dev
+  # ─────────────────────────────────────────────────────────────────────────────
+  adminer:
+    image: adminer:latest
+    container_name: climax-adminer-dev
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: dracula
+    ports:
+      - "${ADMINER_PORT:-8080}:8080"
+    networks:
+      - climax-dev-network
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Volumes & Networks
+# ═══════════════════════════════════════════════════════════════════════════════
+volumes:
+  postgres_data_dev:
+    name: climax-postgres-data-dev
+
+networks:
+  climax-dev-network:
+    name: climax-dev-network
+    driver: bridge

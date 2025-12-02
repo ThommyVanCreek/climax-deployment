@@ -1,8 +1,8 @@
 # ClimaX Deployment
 
-Production deployment configuration for the ClimaX security system.
+Production and development deployment configuration for the ClimaX security system.
 
-## Quick Start
+## Quick Start (Production)
 
 ```bash
 # 1. Configure environment
@@ -16,6 +16,27 @@ docker-compose up -d
 curl http://localhost:5000/api/health
 ```
 
+## Quick Start (Development)
+
+```bash
+# 1. Configure development environment
+cp .env.dev.example .env.dev
+nano .env.dev  # Set your Bridge IP address!
+
+# 2. Start development services with hot-reload
+./dev.sh
+
+# Or manually:
+docker-compose -f docker-compose.dev.yml --env-file .env.dev up --build
+```
+
+### Development Features
+
+- **Hot-reload** for Vue client (changes apply instantly)
+- **Direct Bridge connection** to your real ESP32 hardware
+- **Database admin** (Adminer) always enabled
+- **Debug logging** enabled by default
+
 ## Services
 
 | Service | Port | Description |
@@ -23,7 +44,7 @@ curl http://localhost:5000/api/health
 | **postgres** | 5432 | PostgreSQL database |
 | **api** | 5000 | Flask REST API server |
 | **client** | 3000 | Vue web dashboard |
-| **adminer** | 8080 | Database admin UI (optional) |
+| **adminer** | 8080 | Database admin UI (optional in prod, always in dev) |
 
 ## Configuration
 
