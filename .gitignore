@@ -1,6 +1,10 @@
 # Environment files (contain secrets)
 .env
+.env.local
+.env.dev
 !.env.example
+!.env.local.example
+!.env.dev.example
 
 # OS
 .DS_Store

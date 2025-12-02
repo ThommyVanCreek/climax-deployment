@@ -19,15 +19,29 @@ curl http://localhost:5000/api/health
 ## Quick Start (Development)
 
 ```bash
-# 1. Configure development environment
+# 1. Configure (optional - defaults work)
+cp .env.local.example .env.local
+nano .env.local  # Set your Bridge IP
+
+# 2. Start everything with one command
+./local.sh
+
+# 3. Stop services
+./stop.sh          # Keep PostgreSQL running
+./stop.sh --all    # Stop everything including PostgreSQL
+```
+
+This runs:
+- **PostgreSQL** in Docker (auto-created)
+- **Flask API** directly with Python
+- **Vue Client** directly with Vite (hot-reload!)
+
+### Development with Docker (alternative)
+
+```bash
+# Full Docker development (builds images)
 cp .env.dev.example .env.dev
-nano .env.dev  # Set your Bridge IP address!
-
-# 2. Start development services with hot-reload
 ./dev.sh
-
-# Or manually:
-docker-compose -f docker-compose.dev.yml --env-file .env.dev up --build
 ```
 
 ### Development Features
