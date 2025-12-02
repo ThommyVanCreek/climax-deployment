@@ -1,0 +1,128 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# ClimaX Full Stack - Production Docker Compose
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# This docker-compose pulls pre-built images from GitLab Container Registry
+#
+# Usage:
+#   # Start all services (API + Database + Client)
+#   docker-compose up -d
+#
+#   # Start with admin tools (Adminer)
+#   docker-compose --profile admin up -d
+#
+#   # View logs
+#   docker-compose logs -f
+#
+#   # Stop all services
+#   docker-compose down
+#
+#   # Stop and remove volumes (WARNING: deletes database!)
+#   docker-compose down -v
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+services:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # PostgreSQL Database
+  # ─────────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: climax-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-climax}
+      POSTGRES_USER: ${POSTGRES_USER:-climax}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Database password required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-climax} -d ${POSTGRES_DB:-climax}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - climax-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # ClimaX API Server (Flask + Gunicorn)
+  # ─────────────────────────────────────────────────────────────────────────────
+  api:
+    image: ${REGISTRY:-registry.gitlab.com/thommyvancreek/climax}/climax-server:${IMAGE_TAG:-latest}
+    container_name: climax-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-climax}
+      DB_USER: ${POSTGRES_USER:-climax}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_POOL_MIN_CONN: ${DB_POOL_MIN_CONN:-2}
+      DB_POOL_MAX_CONN: ${DB_POOL_MAX_CONN:-10}
+      API_KEY_WRITE: ${API_KEY_WRITE:?Write API key required}
+      API_KEY_READ: ${API_KEY_READ:-}
+      PORT: 5000
+      HOST: 0.0.0.0
+      DEBUG: ${DEBUG:-false}
+      TIMEZONE: ${TIMEZONE:-Europe/Berlin}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "${API_PORT:-5000}:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - climax-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # ClimaX Client (Vue3 + Nginx)
+  # ─────────────────────────────────────────────────────────────────────────────
+  client:
+    image: ${REGISTRY:-registry.gitlab.com/thommyvancreek/climax}/climax-client:${IMAGE_TAG:-latest}
+    container_name: climax-client
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${CLIENT_PORT:-3000}:80"
+    networks:
+      - climax-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Adminer (Database Admin UI) - Optional
+  # ─────────────────────────────────────────────────────────────────────────────
+  adminer:
+    image: adminer:latest
+    container_name: climax-adminer
+    restart: unless-stopped
+    profiles:
+      - admin
+    depends_on:
+      - postgres
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: dracula
+    ports:
+      - "${ADMINER_PORT:-8080}:8080"
+    networks:
+      - climax-network
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Volumes & Networks
+# ═══════════════════════════════════════════════════════════════════════════════
+volumes:
+  postgres_data:
+    name: climax-postgres-data
+
+networks:
+  climax-network:
+    name: climax-network
+    driver: bridge

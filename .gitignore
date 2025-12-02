@@ -1,0 +1,14 @@
+# Environment files (contain secrets)
+.env
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backups
+*.sql.backup
+backup_*.sql
+
+# Logs
+*.log
