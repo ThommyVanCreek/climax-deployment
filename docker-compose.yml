@@ -115,12 +115,38 @@ services:
     networks:
       - climax-network
 
+  # ─────────────────────────────────────────────────────────────────────────────
+  # pgAdmin 4 (Modern PostgreSQL Admin UI) - Optional
+  # Access via: http://172.22.0.221:5050 or proxy through NPM
+  # ─────────────────────────────────────────────────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: climax-pgadmin
+    restart: unless-stopped
+    profiles:
+      - admin
+    depends_on:
+      - postgres
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@climax.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?pgAdmin password required}
+      PGADMIN_CONFIG_SERVER_MODE: "True"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "True"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    networks:
+      - climax-network
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Volumes & Networks
 # ═══════════════════════════════════════════════════════════════════════════════
 volumes:
   postgres_data:
     name: climax-postgres-data
+  pgadmin_data:
+    name: climax-pgadmin-data
 
 networks:
   climax-network:
